@@ -1,9 +1,8 @@
 import express from "express";
 import mongoose from "mongoose";
-import cors from "cors";
-import dotenv from "dotenv";
 import session from "express-session";
 import cookieParser from "cookie-parser";
+import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -14,11 +13,6 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
-
 app.use(express.json());
 app.use(cookieParser());
 
@@ -26,48 +20,105 @@ app.use(session({
   secret: "supersecretkey",
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false } // ⚠️ mettre true si HTTPS seulement
+  cookie: { secure: false }
 }));
 
-mongoose.connect(process.env.MONGO_URI);
+mongoose.connect(process.env.MONGO_URI)
+.then(() => console.log("Mongo connecté"))
+.catch(err => console.log(err));
 
-// 🔐 Middleware protection
+/* ========================
+   MODELE USER
+======================== */
+
+const userSchema = new mongoose.Schema({
+  username: String,
+  weeks: [String]
+});
+
+const User = mongoose.model("User", userSchema);
+
+/* ========================
+   AUTH MIDDLEWARE
+======================== */
+
 function requireAuth(req, res, next) {
-  if (req.session.loggedIn) {
+  if (req.session.userId) {
     next();
   } else {
-    res.redirect("/");
+    res.status(401).json({ error: "Non autorisé" });
   }
 }
 
-// 🔐 LOGIN
-app.post("/login", (req, res) => {
+/* ========================
+   LOGIN
+======================== */
+
+app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   if (
     username === process.env.ACCOUNT_USERNAME &&
     password === process.env.ACCOUNT_PASSWORD
   ) {
-    req.session.loggedIn = true;
+
+    let user = await User.findOne({ username });
+
+    if (!user) {
+      user = new User({
+        username,
+        weeks: []
+      });
+      await user.save();
+    }
+
+    req.session.userId = user._id;
     res.json({ success: true });
+
   } else {
     res.status(401).json({ success: false });
   }
 });
 
-// 🔓 LOGOUT
+/* ========================
+   GET WEEKS
+======================== */
+
+app.get("/weeks", requireAuth, async (req, res) => {
+  const user = await User.findById(req.session.userId);
+  res.json(user.weeks);
+});
+
+/* ========================
+   SAVE WEEKS
+======================== */
+
+app.post("/weeks", requireAuth, async (req, res) => {
+  const { weeks } = req.body;
+
+  await User.findByIdAndUpdate(
+    req.session.userId,
+    { weeks },
+    { new: true }
+  );
+
+  res.json({ success: true });
+});
+
+/* ========================
+   LOGOUT
+======================== */
+
 app.get("/logout", (req, res) => {
   req.session.destroy(() => {
     res.redirect("/");
   });
 });
 
-// 📄 Servir fichiers statiques
+/* ========================
+   STATIC FILES
+======================== */
+
 app.use(express.static("public"));
 
-// 🔒 Protection main.html
-app.get("/main.html", requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, "public/main.html"));
-});
-
-app.listen(3000, () => console.log("Server started"));
+app.listen(3000, () => console.log("Server lancé"));
