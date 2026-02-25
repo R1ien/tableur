@@ -164,17 +164,21 @@ let currentWeek = null;
    LOAD DATA FROM MONGODB
 ========================= */
 async function loadData() {
-  const res = await fetch("/weeks", {
-    credentials: "include"
-  });
+  try {
+    const res = await fetch("/weeks", { credentials: "include" });
 
-  if (!res.ok) {
+    if (res.status === 401) {
+      // Non connecté → redirection login
+      window.location.href = "/";
+      return;
+    }
+
+    data = await res.json();
+    renderWeeks();
+  } catch (err) {
+    console.error(err);
     window.location.href = "/";
-    return;
   }
-
-  data = await res.json();
-  renderWeeks();
 }
 
 /* =========================
@@ -210,22 +214,6 @@ async function deleteWeek() {
   currentWeek = null;
   document.getElementById("details").style.display = "none";
   await loadData();
-}
-
-/* =========================
-   RENDER WEEKS
-========================= */
-function renderWeeks() {
-  const container = document.getElementById("weeksList");
-  container.innerHTML = "";
-
-  Object.keys(data).forEach(week => {
-    const div = document.createElement("div");
-    div.className = "week-item";
-    div.innerText = week;
-    div.onclick = () => openWeek(week);
-    container.appendChild(div);
-  });
 }
 
 /* =========================
@@ -291,6 +279,8 @@ function renderPayments() {
 
   let totalNet = 0;
 
+  if (!data[currentWeek]) return;
+
   data[currentWeek].forEach((item, index) => {
     const net = item.amount - item.fees;
     totalNet += net;
@@ -316,6 +306,7 @@ function renderPayments() {
     "Total par personne: " + (totalNet/2).toFixed(2) + " $";
 }
 
+// AU CHARGEMENT
 loadData();
 </script>
 
