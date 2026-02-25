@@ -1,272 +1,74 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestion Paiements</title>
-
-<style>
-* { box-sizing: border-box; }
-
-body {
-  font-family: 'Segoe UI', sans-serif;
-  background: linear-gradient(135deg, #0f172a, #1e293b);
-  color: white;
-  margin: 0;
-  padding: 20px;
-}
-
-.container { max-width: 1100px; margin: auto; }
-
-h1 { text-align: center; margin-bottom: 30px; }
-
-.card {
-  background: rgba(255,255,255,0.05);
-  backdrop-filter: blur(10px);
-  padding: 20px;
-  border-radius: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-}
-
-input {
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  margin-bottom: 10px;
-  font-size: 15px;
-  width: 100%;
-}
-
-.input-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.input-row input {
-  flex: 1;
-  min-width: 150px;
-}
-
-button {
-  padding: 10px 15px;
-  border-radius: 12px;
-  border: none;
-  cursor: pointer;
-  font-weight: bold;
-  transition: 0.2s;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #2563eb;
-  transform: scale(1.05);
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-  transform: scale(1.05);
-}
-
-.week-item {
-  padding: 15px;
-  background: #334155;
-  border-radius: 15px;
-  margin-bottom: 10px;
-  cursor: pointer;
-}
-
-.payment {
-  background: #0ea5e9;
-  padding: 12px;
-  border-radius: 12px;
-  margin-bottom: 10px;
-  font-size: 14px;
-}
-
-.total-box {
-  margin-top: 15px;
-  background: #22c55e;
-  padding: 15px;
-  border-radius: 15px;
-  color: black;
-  font-weight: bold;
-}
-
-.payment-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.payment small {
-  display: block;
-  opacity: 0.9;
-  margin-top: 5px;
-}
-
-@media(max-width: 600px){
-  .input-row { flex-direction: column; }
-}
-</style>
+<title>Semaines</title>
 </head>
 <body>
 
-<div class="container">
-  <h1>Gestion des Paiements 💵</h1>
+<h2>Mes semaines</h2>
 
-  <div class="card">
-    <h3>Créer une semaine</h3>
-    <input type="text" id="weekName" placeholder="Nom de la semaine">
-    <button class="btn-primary" onclick="createWeek()">Créer</button>
-  </div>
+<input id="weekInput" placeholder="Nouvelle semaine">
+<button onclick="addWeek()">Ajouter</button>
 
-  <div class="card">
-    <h3>Semaines</h3>
-    <div id="weeksList"></div>
-  </div>
+<ul id="weekList"></ul>
 
-  <div class="card" id="details" style="display:none;">
-    <h3 id="weekTitle"></h3>
-    <button class="btn-danger" onclick="deleteWeek()">Supprimer la semaine</button>
-
-    <br><br>
-
-    <div class="input-row">
-      <input type="datetime-local" id="datetime">
-      <input type="email" id="email" placeholder="Email client">
-      <input type="number" id="amount" placeholder="Montant $">
-      <input type="number" id="fees" placeholder="Frais $">
-    </div>
-
-    <button class="btn-primary" onclick="addPayment()">Ajouter paiement</button>
-
-    <div id="payments"></div>
-    <div class="total-box" id="totals"></div>
-  </div>
-</div>
+<button onclick="saveWeeks()">Sauvegarder</button>
 
 <script>
-let data = JSON.parse(localStorage.getItem("weeks")) || {};
-let currentWeek = null;
+let weeks = [];
 
-function save() {
-  localStorage.setItem("weeks", JSON.stringify(data));
+async function loadWeeks() {
+  const res = await fetch("/weeks", {
+    credentials: "include"
+  });
+
+  if (!res.ok) {
+    window.location.href = "/";
+    return;
+  }
+
+  weeks = await res.json();
+  render();
 }
 
-function createWeek() {
-  const name = document.getElementById("weekName").value.trim();
-  if (!name) return;
+function render() {
+  const list = document.getElementById("weekList");
+  list.innerHTML = "";
 
-  if (!data[name]) {
-    data[name] = [];
-    save();
-    renderWeeks();
-    document.getElementById("weekName").value = "";
+  weeks.forEach((week, index) => {
+    const li = document.createElement("li");
+    li.textContent = week;
+
+    li.onclick = () => {
+      weeks.splice(index, 1);
+      render();
+    };
+
+    list.appendChild(li);
+  });
+}
+
+function addWeek() {
+  const input = document.getElementById("weekInput");
+  if (input.value.trim() !== "") {
+    weeks.push(input.value.trim());
+    input.value = "";
+    render();
   }
 }
 
-function deleteWeek() {
-  if (!currentWeek) return;
-  if (!confirm("Supprimer cette semaine ?")) return;
-
-  delete data[currentWeek];
-  currentWeek = null;
-  save();
-  renderWeeks();
-  document.getElementById("details").style.display = "none";
-}
-
-function renderWeeks() {
-  const container = document.getElementById("weeksList");
-  container.innerHTML = "";
-
-  Object.keys(data).forEach(week => {
-    const div = document.createElement("div");
-    div.className = "week-item";
-    div.innerText = week;
-    div.onclick = () => openWeek(week);
-    container.appendChild(div);
-  });
-}
-
-function openWeek(name) {
-  currentWeek = name;
-  document.getElementById("details").style.display = "block";
-  document.getElementById("weekTitle").innerText = name;
-  renderPayments();
-}
-
-function addPayment() {
-  if (!currentWeek) return;
-
-  const datetime = document.getElementById("datetime").value;
-  const email = document.getElementById("email").value;
-  const amount = parseFloat(document.getElementById("amount").value) || 0;
-  const fees = parseFloat(document.getElementById("fees").value) || 0;
-
-  if (!datetime || !email || amount <= 0) return;
-
-  data[currentWeek].push({ datetime, email, amount, fees });
-
-  document.getElementById("datetime").value = "";
-  document.getElementById("email").value = "";
-  document.getElementById("amount").value = "";
-  document.getElementById("fees").value = "";
-
-  save();
-  renderPayments();
-}
-
-function deletePayment(index) {
-  if (!confirm("Supprimer ce paiement ?")) return;
-  data[currentWeek].splice(index, 1);
-  save();
-  renderPayments();
-}
-
-function renderPayments() {
-  const container = document.getElementById("payments");
-  container.innerHTML = "";
-
-  let totalNet = 0;
-
-  data[currentWeek].forEach((item, index) => {
-    const net = item.amount - item.fees;
-    totalNet += net;
-
-    const div = document.createElement("div");
-    div.className = "payment";
-
-    div.innerHTML = `
-      <div class="payment-header">
-        <strong>${item.datetime.replace("T", " ")}</strong>
-        <button class="btn-danger" onclick="deletePayment(${index})">Supprimer</button>
-      </div>
-      <small>Email: ${item.email}</small>
-      <small>Brut: ${item.amount.toFixed(2)}$ | Frais: ${item.fees.toFixed(2)}$</small>
-      <small>Net: ${net.toFixed(2)}$ | Part chacun: ${(net/2).toFixed(2)}$</small>
-    `;
-
-    container.appendChild(div);
+async function saveWeeks() {
+  await fetch("/weeks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ weeks })
   });
 
-  document.getElementById("totals").innerHTML =
-    "Total net semaine: " + totalNet.toFixed(2) + " $<br>" +
-    "Total par personne: " + (totalNet/2).toFixed(2) + " $";
+  alert("Sauvegardé sur MongoDB !");
 }
 
-renderWeeks();
+loadWeeks();
 </script>
 
 </body>
