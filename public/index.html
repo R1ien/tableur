@@ -2,14 +2,18 @@
 <html>
 <head>
 <title>Login</title>
+  <link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
 
+  <div class="container">
 <h2>Connexion</h2>
 <input id="username" placeholder="Username">
 <input id="password" type="password" placeholder="Password">
 <button onclick="login()">Connexion</button>
-
+</div>
+  
 <script>
 async function login() {
   const username = document.getElementById("username").value;
