@@ -4,121 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestion Paiements</title>
-
-<style>
-* { box-sizing: border-box; }
-
-body {
-  font-family: 'Segoe UI', sans-serif;
-  background: linear-gradient(135deg, #0f172a, #1e293b);
-  color: white;
-  margin: 0;
-  padding: 20px;
-}
-
-.container { max-width: 1100px; margin: auto; }
-
-h1 { text-align: center; margin-bottom: 30px; }
-
-.card {
-  background: rgba(255,255,255,0.05);
-  backdrop-filter: blur(10px);
-  padding: 20px;
-  border-radius: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-}
-
-input {
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  margin-bottom: 10px;
-  font-size: 15px;
-  width: 100%;
-}
-
-.input-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.input-row input {
-  flex: 1;
-  min-width: 150px;
-}
-
-button {
-  padding: 10px 15px;
-  border-radius: 12px;
-  border: none;
-  cursor: pointer;
-  font-weight: bold;
-  transition: 0.2s;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #2563eb;
-  transform: scale(1.05);
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-  transform: scale(1.05);
-}
-
-.week-item {
-  padding: 15px;
-  background: #334155;
-  border-radius: 15px;
-  margin-bottom: 10px;
-  cursor: pointer;
-}
-
-.payment {
-  background: #0ea5e9;
-  padding: 12px;
-  border-radius: 12px;
-  margin-bottom: 10px;
-  font-size: 14px;
-}
-
-.total-box {
-  margin-top: 15px;
-  background: #22c55e;
-  padding: 15px;
-  border-radius: 15px;
-  color: black;
-  font-weight: bold;
-}
-
-.payment-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.payment small {
-  display: block;
-  opacity: 0.9;
-  margin-top: 5px;
-}
-
-@media(max-width: 600px){
-  .input-row { flex-direction: column; }
-}
-</style>
+<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -157,68 +44,49 @@ button {
 </div>
 
 <script>
-let data = {};
+let data = JSON.parse(localStorage.getItem("weeks")) || {};
 let currentWeek = null;
 
-/* =========================
-   LOAD DATA FROM MONGODB
-========================= */
-async function loadData() {
-  try {
-    const res = await fetch("/weeks", { credentials: "include" });
-
-    if (res.status === 401) {
-      // Non connecté → redirection login
-      window.location.href = "/";
-      return;
-    }
-
-    data = await res.json();
-    renderWeeks();
-  } catch (err) {
-    console.error(err);
-    window.location.href = "/";
-  }
+function save() {
+  localStorage.setItem("weeks", JSON.stringify(data));
 }
 
-/* =========================
-   CREATE WEEK
-========================= */
-async function createWeek() {
+function createWeek() {
   const name = document.getElementById("weekName").value.trim();
   if (!name) return;
 
-  await fetch("/weeks", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ name })
-  });
-
-  document.getElementById("weekName").value = "";
-  await loadData();
+  if (!data[name]) {
+    data[name] = [];
+    save();
+    renderWeeks();
+    document.getElementById("weekName").value = "";
+  }
 }
 
-/* =========================
-   DELETE WEEK
-========================= */
-async function deleteWeek() {
+function deleteWeek() {
   if (!currentWeek) return;
   if (!confirm("Supprimer cette semaine ?")) return;
 
-  await fetch(`/weeks/${encodeURIComponent(currentWeek)}`, {
-    method: "DELETE",
-    credentials: "include"
-  });
-
+  delete data[currentWeek];
   currentWeek = null;
+  save();
+  renderWeeks();
   document.getElementById("details").style.display = "none";
-  await loadData();
 }
 
-/* =========================
-   OPEN WEEK
-========================= */
+function renderWeeks() {
+  const container = document.getElementById("weeksList");
+  container.innerHTML = "";
+
+  Object.keys(data).forEach(week => {
+    const div = document.createElement("div");
+    div.className = "week-item";
+    div.innerText = week;
+    div.onclick = () => openWeek(week);
+    container.appendChild(div);
+  });
+}
+
 function openWeek(name) {
   currentWeek = name;
   document.getElementById("details").style.display = "block";
@@ -226,10 +94,7 @@ function openWeek(name) {
   renderPayments();
 }
 
-/* =========================
-   ADD PAYMENT
-========================= */
-async function addPayment() {
+function addPayment() {
   if (!currentWeek) return;
 
   const datetime = document.getElementById("datetime").value;
@@ -239,47 +104,29 @@ async function addPayment() {
 
   if (!datetime || !email || amount <= 0) return;
 
-  await fetch(`/weeks/${encodeURIComponent(currentWeek)}/payments`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ datetime, email, amount, fees })
-  });
+  data[currentWeek].push({ datetime, email, amount, fees });
 
   document.getElementById("datetime").value = "";
   document.getElementById("email").value = "";
   document.getElementById("amount").value = "";
   document.getElementById("fees").value = "";
 
-  await loadData();
-  openWeek(currentWeek);
+  save();
+  renderPayments();
 }
 
-/* =========================
-   DELETE PAYMENT
-========================= */
-async function deletePayment(index) {
+function deletePayment(index) {
   if (!confirm("Supprimer ce paiement ?")) return;
-
-  await fetch(`/weeks/${encodeURIComponent(currentWeek)}/payments/${index}`, {
-    method: "DELETE",
-    credentials: "include"
-  });
-
-  await loadData();
-  openWeek(currentWeek);
+  data[currentWeek].splice(index, 1);
+  save();
+  renderPayments();
 }
 
-/* =========================
-   RENDER PAYMENTS
-========================= */
 function renderPayments() {
   const container = document.getElementById("payments");
   container.innerHTML = "";
 
   let totalNet = 0;
-
-  if (!data[currentWeek]) return;
 
   data[currentWeek].forEach((item, index) => {
     const net = item.amount - item.fees;
@@ -306,8 +153,7 @@ function renderPayments() {
     "Total par personne: " + (totalNet/2).toFixed(2) + " $";
 }
 
-// AU CHARGEMENT
-loadData();
+renderWeeks();
 </script>
 
 </body>
