@@ -32,13 +32,21 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.log(err));
 
 /* ========================
-   SCHEMA USER
+   SCHEMA USER (IMPORTANT)
 ======================== */
+
+const paymentSchema = new mongoose.Schema({
+  datetime: String,
+  email: String,
+  amount: Number,
+  fees: Number
+}, { _id: false });
 
 const userSchema = new mongoose.Schema({
   username: String,
   weeks: {
-    type: Object,
+    type: Map,
+    of: [paymentSchema],
     default: {}
   }
 });
@@ -71,10 +79,7 @@ app.post("/login", async (req, res) => {
     let user = await User.findOne({ username });
 
     if (!user) {
-      user = new User({
-        username,
-        weeks: {}
-      });
+      user = new User({ username });
       await user.save();
     }
 
@@ -92,7 +97,11 @@ app.post("/login", async (req, res) => {
 
 app.get("/weeks", requireAuth, async (req, res) => {
   const user = await User.findById(req.session.userId);
-  res.json(user.weeks);
+
+  // Convert Map -> Object pour frontend
+  const weeksObject = Object.fromEntries(user.weeks);
+
+  res.json(weeksObject);
 });
 
 /* ========================
@@ -105,8 +114,8 @@ app.post("/weeks", requireAuth, async (req, res) => {
 
   const user = await User.findById(req.session.userId);
 
-  if (!user.weeks[name]) {
-    user.weeks[name] = [];
+  if (!user.weeks.has(name)) {
+    user.weeks.set(name, []);
     await user.save();
   }
 
@@ -122,7 +131,7 @@ app.delete("/weeks/:weekName", requireAuth, async (req, res) => {
 
   const user = await User.findById(req.session.userId);
 
-  delete user.weeks[weekName];
+  user.weeks.delete(weekName);
 
   await user.save();
 
@@ -139,16 +148,15 @@ app.post("/weeks/:weekName/payments", requireAuth, async (req, res) => {
 
   const user = await User.findById(req.session.userId);
 
-  if (!user.weeks[weekName]) {
-    user.weeks[weekName] = [];
+  if (!user.weeks.has(weekName)) {
+    user.weeks.set(weekName, []);
   }
 
-  user.weeks[weekName].push({
-    datetime,
-    email,
-    amount,
-    fees
-  });
+  const weekPayments = user.weeks.get(weekName);
+
+  weekPayments.push({ datetime, email, amount, fees });
+
+  user.weeks.set(weekName, weekPayments);
 
   await user.save();
 
@@ -165,22 +173,17 @@ app.delete("/weeks/:weekName/payments/:index", requireAuth, async (req, res) => 
 
   const user = await User.findById(req.session.userId);
 
-  if (user.weeks[weekName] && user.weeks[weekName][index]) {
-    user.weeks[weekName].splice(index, 1);
-    await user.save();
+  if (user.weeks.has(weekName)) {
+    const weekPayments = user.weeks.get(weekName);
+
+    if (weekPayments[index]) {
+      weekPayments.splice(index, 1);
+      user.weeks.set(weekName, weekPayments);
+      await user.save();
+    }
   }
 
   res.json({ success: true });
-});
-
-/* ========================
-   LOGOUT
-======================== */
-
-app.get("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect("/");
-  });
 });
 
 /* ========================
