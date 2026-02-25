@@ -6,9 +6,9 @@
 <body>
 
 <h2>Connexion</h2>
-<input type="text" id="username" placeholder="Username">
-<input type="password" id="password" placeholder="Password">
-<button onclick="login()">Se connecter</button>
+<input id="username" placeholder="Username">
+<input id="password" type="password" placeholder="Password">
+<button onclick="login()">Connexion</button>
 
 <script>
 async function login() {
@@ -22,10 +22,10 @@ async function login() {
     body: JSON.stringify({ username, password })
   });
 
-  if(res.ok){
+  if (res.ok) {
     window.location.href = "/main.html";
   } else {
-    alert("Mauvais identifiants");
+    alert("Identifiants incorrects");
   }
 }
 </script>
