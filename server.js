@@ -23,17 +23,24 @@ app.use(session({
   cookie: { secure: false }
 }));
 
+/* ========================
+   MONGODB
+======================== */
+
 mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log("Mongo connecté"))
-.catch(err => console.log(err));
+  .then(() => console.log("MongoDB connecté"))
+  .catch(err => console.log(err));
 
 /* ========================
-   MODELE USER
+   SCHEMA USER
 ======================== */
 
 const userSchema = new mongoose.Schema({
   username: String,
-  weeks: [String]
+  weeks: {
+    type: Object,
+    default: {}
+  }
 });
 
 const User = mongoose.model("User", userSchema);
@@ -61,13 +68,12 @@ app.post("/login", async (req, res) => {
     username === process.env.ACCOUNT_USERNAME &&
     password === process.env.ACCOUNT_PASSWORD
   ) {
-
     let user = await User.findOne({ username });
 
     if (!user) {
       user = new User({
         username,
-        weeks: []
+        weeks: {}
       });
       await user.save();
     }
@@ -90,17 +96,79 @@ app.get("/weeks", requireAuth, async (req, res) => {
 });
 
 /* ========================
-   SAVE WEEKS
+   CREATE WEEK
 ======================== */
 
 app.post("/weeks", requireAuth, async (req, res) => {
-  const { weeks } = req.body;
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: "Nom requis" });
 
-  await User.findByIdAndUpdate(
-    req.session.userId,
-    { weeks },
-    { new: true }
-  );
+  const user = await User.findById(req.session.userId);
+
+  if (!user.weeks[name]) {
+    user.weeks[name] = [];
+    await user.save();
+  }
+
+  res.json({ success: true });
+});
+
+/* ========================
+   DELETE WEEK
+======================== */
+
+app.delete("/weeks/:weekName", requireAuth, async (req, res) => {
+  const weekName = req.params.weekName;
+
+  const user = await User.findById(req.session.userId);
+
+  delete user.weeks[weekName];
+
+  await user.save();
+
+  res.json({ success: true });
+});
+
+/* ========================
+   ADD PAYMENT
+======================== */
+
+app.post("/weeks/:weekName/payments", requireAuth, async (req, res) => {
+  const weekName = req.params.weekName;
+  const { datetime, email, amount, fees } = req.body;
+
+  const user = await User.findById(req.session.userId);
+
+  if (!user.weeks[weekName]) {
+    user.weeks[weekName] = [];
+  }
+
+  user.weeks[weekName].push({
+    datetime,
+    email,
+    amount,
+    fees
+  });
+
+  await user.save();
+
+  res.json({ success: true });
+});
+
+/* ========================
+   DELETE PAYMENT
+======================== */
+
+app.delete("/weeks/:weekName/payments/:index", requireAuth, async (req, res) => {
+  const weekName = req.params.weekName;
+  const index = parseInt(req.params.index);
+
+  const user = await User.findById(req.session.userId);
+
+  if (user.weeks[weekName] && user.weeks[weekName][index]) {
+    user.weeks[weekName].splice(index, 1);
+    await user.save();
+  }
 
   res.json({ success: true });
 });
@@ -121,4 +189,4 @@ app.get("/logout", (req, res) => {
 
 app.use(express.static("public"));
 
-app.listen(3000, () => console.log("Server lancé"));
+app.listen(3000, () => console.log("Serveur lancé sur port 3000"));
